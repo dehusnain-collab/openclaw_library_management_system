@@ -197,91 +197,6 @@ class CacheService:
             logger.warning(f"Failed to check cache key {key}: {e}")
             return False
     
-    @classmethod
-    def increment(cls, key: str, amount: int = 1) -> Optional[int]:
-        """
-        Increment a counter in cache.
-        
-        Args:
-            key: Cache key
-            amount: Amount to increment
-            
-        Returns:
-            New value or None if failed
-        """
-        try:
-            client = cls.get_redis_client()
-            return client.incrby(key, amount)
-        except Exception as e:
-            logger.warning(f"Failed to increment cache key {key}: {e}")
-            return None
-    
-    @classmethod
-    def decrement(cls, key: str, amount: int = 1) -> Optional[int]:
-        """
-        Decrement a counter in cache.
-        
-        Args:
-            key: Cache key
-            amount: Amount to decrement
-            
-        Returns:
-            New value or None if failed
-        """
-        try:
-            client = cls.get_redis_client()
-            return client.decrby(key, amount)
-        except Exception as e:
-            logger.warning(f"Failed to decrement cache key {key}: {e}")
-            return None
-    
-    @classmethod
-    def get_keys(cls, pattern: str = "*") -> List[str]:
-        """
-        Get keys matching a pattern.
-        
-        Args:
-            pattern: Redis pattern
-            
-        Returns:
-            List of matching keys
-        """
-        try:
-            client = cls.get_redis_client()
-            return client.keys(pattern)
-        except Exception as e:
-            logger.warning(f"Failed to get cache keys for pattern {pattern}: {e}")
-            return []
-    
-    @classmethod
-    def get_stats(cls) -> Dict[str, Any]:
-        """
-        Get cache statistics.
-        
-        Returns:
-            Dictionary with cache statistics
-        """
-        try:
-            client = cls.get_redis_client()
-            info = client.info()
-            
-            return {
-                "connected": True,
-                "used_memory": info.get("used_memory_human", "N/A"),
-                "total_keys": info.get("db0", {}).get("keys", 0),
-                "uptime_days": info.get("uptime_in_days", 0),
-                "connected_clients": info.get("connected_clients", 0),
-                "hits": info.get("keyspace_hits", 0),
-                "misses": info.get("keyspace_misses", 0),
-                "hit_rate": (
-                    info.get("keyspace_hits", 0) / 
-                    max(info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0), 1)
-                )
-            }
-        except Exception as e:
-            logger.warning(f"Failed to get cache stats: {e}")
-            return {"connected": False, "error": str(e)}
-    
     # Book-specific cache methods
     @classmethod
     def cache_book(cls, book_id: int, book_data: Dict[str, Any]) -> bool:
@@ -376,40 +291,40 @@ class CacheService:
         key = f"search:{hash(params_str)}"
         return cls.get(key)
     
-    # User session cache methods
+    # Borrowing cache methods
     @classmethod
-    def cache_user_session(cls, user_id: int, session_data: Dict[str, Any]) -> bool:
+    def cache_user_borrowings(cls, user_id: int, borrowings: List[Dict[str, Any]]) -> bool:
         """
-        Cache user session data.
+        Cache user borrowings.
         
         Args:
             user_id: User ID
-            session_data: Session data
+            borrowings: Borrowing data
             
         Returns:
             True if successful, False otherwise
         """
-        key = f"session:user:{user_id}"
-        return cls.set(key, session_data, expire_seconds=86400)  # 24 hours
+        key = f"borrowings:user:{user_id}"
+        return cls.set(key, borrowings, expire_seconds=600)  # 10 minutes
     
     @classmethod
-    def get_cached_user_session(cls, user_id: int) -> Optional[Dict[str, Any]]:
+    def get_cached_user_borrowings(cls, user_id: int) -> Optional[List[Dict[str, Any]]]:
         """
-        Get cached user session data.
+        Get cached user borrowings.
         
         Args:
             user_id: User ID
             
         Returns:
-            Cached session data or None
+            Cached borrowings or None
         """
-        key = f"session:user:{user_id}"
+        key = f"borrowings:user:{user_id}"
         return cls.get(key)
     
     @classmethod
-    def invalidate_user_session(cls, user_id: int) -> bool:
+    def invalidate_user_borrowings_cache(cls, user_id: int) -> bool:
         """
-        Invalidate user session cache.
+        Invalidate user borrowings cache.
         
         Args:
             user_id: User ID
@@ -417,56 +332,85 @@ class CacheService:
         Returns:
             True if successful, False otherwise
         """
-        key = f"session:user:{user_id}"
+        key = f"borrowings:user:{user_id}"
         return cls.delete(key)
     
-    # Rate limiting cache methods
+    # Statistics cache methods
     @classmethod
-    def check_rate_limit(
-        cls, 
-        identifier: str, 
-        limit: int, 
-        window_seconds: int
-    ) -> Dict[str, Any]:
+    def cache_book_stats(cls, stats: Dict[str, Any]) -> bool:
         """
-        Check rate limit for an identifier.
+        Cache book statistics.
         
         Args:
-            identifier: Rate limit identifier (e.g., "ip:127.0.0.1" or "user:123")
-            limit: Maximum requests in window
-            window_seconds: Time window in seconds
+            stats: Book statistics
             
         Returns:
-            Dictionary with rate limit status
+            True if successful, False otherwise
         """
-        key = f"ratelimit:{identifier}"
+        key = "stats:books"
+        return cls.set(key, stats, expire_seconds=1800)  # 30 minutes
+    
+    @classmethod
+    def get_cached_book_stats(cls) -> Optional[Dict[str, Any]]:
+        """
+        Get cached book statistics.
         
+        Returns:
+            Cached book statistics or None
+        """
+        key = "stats:books"
+        return cls.get(key)
+    
+    @classmethod
+    def cache_borrowing_stats(cls, stats: Dict[str, Any]) -> bool:
+        """
+        Cache borrowing statistics.
+        
+        Args:
+            stats: Borrowing statistics
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        key = "stats:borrowings"
+        return cls.set(key, stats, expire_seconds=1800)  # 30 minutes
+    
+    @classmethod
+    def get_cached_borrowing_stats(cls) -> Optional[Dict[str, Any]]:
+        """
+        Get cached borrowing statistics.
+        
+        Returns:
+            Cached borrowing statistics or None
+        """
+        key = "stats:borrowings"
+        return cls.get(key)
+    
+    @classmethod
+    def get_stats(cls) -> Dict[str, Any]:
+        """
+        Get cache statistics.
+        
+        Returns:
+            Dictionary with cache statistics
+        """
         try:
             client = cls.get_redis_client()
-            
-            # Use Redis transactions for atomic operations
-            pipe = client.pipeline()
-            pipe.incr(key)
-            pipe.expire(key, window_seconds)
-            results = pipe.execute()
-            
-            current_count = results[0]
+            info = client.info()
             
             return {
-                "allowed": current_count <= limit,
-                "current": current_count,
-                "limit": limit,
-                "remaining": max(0, limit - current_count),
-                "reset_in": window_seconds
+                "connected": True,
+                "used_memory": info.get("used_memory_human", "N/A"),
+                "total_keys": info.get("db0", {}).get("keys", 0),
+                "uptime_days": info.get("uptime_in_days", 0),
+                "connected_clients": info.get("connected_clients", 0),
+                "hits": info.get("keyspace_hits", 0),
+                "misses": info.get("keyspace_misses", 0),
+                "hit_rate": (
+                    info.get("keyspace_hits", 0) / 
+                    max(info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0), 1)
+                )
             }
         except Exception as e:
-            logger.warning(f"Failed to check rate limit for {identifier}: {e}")
-            # If Redis fails, allow the request
-            return {
-                "allowed": True,
-                "current": 0,
-                "limit": limit,
-                "remaining": limit,
-                "reset_in": window_seconds,
-                "cache_error": True
-            }
+            logger.warning(f"Failed to get cache stats: {e}")
+            return {"connected": False, "error": str(e)}

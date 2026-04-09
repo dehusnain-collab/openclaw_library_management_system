@@ -50,6 +50,43 @@ openclaw_library_management_system/
 ```
 
 ## 🚀 Getting Started
+## 🗄️ Database Setup
+
+### Initial Setup
+```bash
+# Create database (if not using Docker)
+createdb library_db
+
+# Run migrations
+alembic upgrade head
+
+# Create admin user (optional)
+python scripts/create_admin.py
+```
+
+### Migration Commands
+```bash
+# Create new migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+
+# Show migration history
+alembic history
+
+# Show current revision
+alembic current
+```
+
+### Database Health
+- Health endpoint: `GET /health/database`
+- Full health check: `GET /health/full`
+- Basic health: `GET /health`
+
 
 ### Prerequisites
 

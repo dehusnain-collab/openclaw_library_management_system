@@ -9,10 +9,12 @@ router = APIRouter()
 # Import and include all route modules
 from app.controllers.health import router as health_router
 from app.controllers.auth import router as auth_router
+from app.controllers.rbac import router as rbac_router
 
 # Include routers
 router.include_router(health_router)
 router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+router.include_router(rbac_router, prefix="/api/v1", tags=["RBAC"])
 
 # Root endpoint
 @router.get("/")
@@ -27,5 +29,12 @@ async def root():
             "login": "/api/v1/auth/login",
             "refresh": "/api/v1/auth/refresh",
             "logout": "/api/v1/auth/logout"
+        },
+        "rbac": {
+            "initialize": "/api/v1/rbac/initialize",
+            "stats": "/api/v1/rbac/stats",
+            "roles": "/api/v1/roles",
+            "permissions": "/api/v1/permissions",
+            "user_permissions": "/api/v1/users/{user_id}/permissions"
         }
     }

@@ -10,6 +10,7 @@ import logging
 
 from app.models.book import Book, BookStatus
 from app.schemas.book import BookCreate, BookUpdate, BookSearchParams
+from app.services.cache_service import CacheService
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -69,23 +70,41 @@ class BookService:
             raise
     
     @staticmethod
-    async def get_book(book_id: int, db: AsyncSession) -> Optional[Book]:
+    async def get_book(book_id: int, db: AsyncSession, use_cache: bool = True) -> Optional[Book]:
         """
-        Get a book by ID.
+        Get a book by ID with optional caching.
         
         Args:
             book_id: Book ID
             db: Database session
+            use_cache: Whether to use cache
             
         Returns:
             Book if found, None otherwise
         """
-        logger.debug(f"Getting book: {book_id}")
+        logger.debug(f"Getting book: {book_id}, use_cache={use_cache}")
         
         try:
+            # Try to get from cache first
+            if use_cache and CacheService.is_available():
+                cached_book = CacheService.get_cached_book(book_id)
+                if cached_book:
+                    logger.debug(f"Book {book_id} found in cache")
+                    # Convert dict back to Book object
+                    book = Book(**cached_book)
+                    return book
+            
+            # Get from database
             query = select(Book).where(Book.id == book_id)
             result = await db.execute(query)
-            return result.scalar_one_or_none()
+            book = result.scalar_one_or_none()
+            
+            # Cache the result
+            if book and use_cache and CacheService.is_available():
+                book_dict = book.to_dict()
+                CacheService.cache_book(book_id, book_dict)
+            
+            return book
             
         except Exception as e:
             logger.error(f"Failed to get book {book_id}: {e}")
@@ -128,6 +147,10 @@ class BookService:
             await db.commit()
             await db.refresh(book)
             
+            # Invalidate cache
+            if CacheService.is_available():
+                CacheService.invalidate_book_cache(book_id)
+            
             logger.info(f"Book updated successfully: {book_id}")
             return book
             
@@ -163,6 +186,10 @@ class BookService:
             
             await db.delete(book)
             await db.commit()
+            
+            # Invalidate cache
+            if CacheService.is_available():
+                CacheService.invalidate_book_cache(book_id)
             
             logger.info(f"Book deleted successfully: {book_id}")
             return True, "Book deleted successfully"
@@ -252,19 +279,28 @@ class BookService:
             return []
     
     @staticmethod
-    async def get_book_stats(db: AsyncSession) -> Dict[str, Any]:
+    async def get_book_stats(db: AsyncSession, use_cache: bool = True) -> Dict[str, Any]:
         """
-        Get book statistics.
+        Get book statistics with optional caching.
         
         Args:
             db: Database session
+            use_cache: Whether to use cache
             
         Returns:
             Dictionary with book statistics
         """
-        logger.info("Getting book statistics")
+        logger.info(f"Getting book statistics, use_cache={use_cache}")
         
         try:
+            # Try to get from cache first
+            if use_cache and CacheService.is_available():
+                cached_stats = CacheService.get_cached_book_stats()
+                if cached_stats:
+                    logger.debug("Book statistics found in cache")
+                    return cached_stats
+            
+            # Calculate statistics
             # Total books
             total_query = select(func.count(Book.id))
             total_result = await db.execute(total_query)
@@ -310,7 +346,7 @@ class BookService:
             total_copies_result = await db.execute(total_copies_query)
             total_copies = total_copies_result.scalar() or 0
             
-            return {
+            stats = {
                 "total_books": total_books,
                 "total_copies": total_copies,
                 "available_books": available_books,
@@ -320,6 +356,12 @@ class BookService:
                 "books_by_language": books_by_language,
                 "average_copies_per_book": float(average_copies)
             }
+            
+            # Cache the statistics
+            if use_cache and CacheService.is_available():
+                CacheService.cache_book_stats(stats)
+            
+            return stats
             
         except Exception as e:
             logger.error(f"Failed to get book statistics: {e}")

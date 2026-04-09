@@ -10,6 +10,7 @@ import logging
 
 from app.models.book import Book, BookStatus
 from app.schemas.book import BookSearchParams
+from app.services.cache_service import CacheService
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -23,7 +24,8 @@ class SearchService:
         search_params: BookSearchParams,
         skip: int = 0,
         limit: int = 100,
-        db: AsyncSession = None
+        db: AsyncSession = None,
+        use_cache: bool = True
     ) -> Tuple[List[Book], int]:
         """
         Search books with filters and return results with total count.
@@ -33,13 +35,23 @@ class SearchService:
             skip: Number of records to skip
             limit: Maximum number of records to return
             db: Database session
+            use_cache: Whether to use cache
             
         Returns:
             Tuple of (books list, total count)
         """
-        logger.info(f"Searching books with params: {search_params.dict()}")
+        logger.info(f"Searching books with params: {search_params.dict()}, use_cache={use_cache}")
         
         try:
+            # Try to get from cache first
+            if use_cache and CacheService.is_available() and skip == 0:
+                cached_results = CacheService.get_cached_search_results(search_params.dict())
+                if cached_results:
+                    logger.debug("Search results found in cache")
+                    # Convert dicts back to Book objects
+                    books = [Book(**book_dict) for book_dict in cached_results[:limit]]
+                    return books, len(cached_results)
+            
             # Build base query
             query = select(Book)
             count_query = select(func.count(Book.id))
@@ -96,6 +108,11 @@ class SearchService:
             # Execute main query
             result = await db.execute(query)
             books = result.scalars().all()
+            
+            # Cache the results (first page only)
+            if use_cache and CacheService.is_available() and skip == 0 and books:
+                books_dict = [book.to_dict() for book in books]
+                CacheService.cache_search_results(search_params.dict(), books_dict)
             
             logger.info(f"Found {len(books)} books out of {total_count} total")
             return books, total_count

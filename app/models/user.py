@@ -35,6 +35,7 @@ class User(BaseModel):
     # Relationships
     roles = relationship("Role", secondary="user_roles", back_populates="users")
     borrowing_records = relationship("BorrowingRecord", back_populates="user")
+    created_books = relationship("Book", back_populates="created_by")
     
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, is_active={self.is_active})>"

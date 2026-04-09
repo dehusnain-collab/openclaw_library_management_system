@@ -268,3 +268,62 @@ For issues, questions, or suggestions:
 ---
 
 **Happy Coding!** 🚀
+## 🔐 Authentication API
+
+### Registration
+```bash
+POST /api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "SecurePass123!",
+  "first_name": "John",
+  "last_name": "Doe"
+}
+```
+
+### Login
+```bash
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "SecurePass123!"
+}
+
+# Response
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "token_type": "bearer"
+}
+```
+
+### Refresh Token
+```bash
+POST /api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+### Logout
+```bash
+POST /api/v1/auth/logout
+```
+
+## Password Requirements
+- Minimum 8 characters
+- Maximum 128 characters
+- At least one digit (0-9)
+- At least one uppercase letter (A-Z)
+- At least one lowercase letter (a-z)
+
+## JWT Configuration
+- Access token: 30 minutes expiration
+- Refresh token: 7 days expiration
+- Algorithm:
